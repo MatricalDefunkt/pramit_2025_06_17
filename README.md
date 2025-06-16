@@ -17,7 +17,8 @@ This is a backend service to monitor restaurant store activity. It ingests store
 ## Getting Started
 
 > [!IMPORTANT]
-> You will need to call `/api/trigger_report/` twice. It does not work the first time around, and the reason for that is unknown.
+> ~You will need to call `/api/trigger_report/` twice. It does not work the first time around, and the reason for that is unknown.~
+> Fixed in the latest commit. It was a race condition.
 
 ### Installation
 

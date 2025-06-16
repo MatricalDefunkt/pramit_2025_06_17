@@ -15,13 +15,29 @@ from store_monitor_api.generate.utils import (
 logger = get_task_logger(__name__)
 
 
-@shared_task
-def generate_report_task(report_id: str):
+@shared_task(bind=True, max_retries=3, default_retry_delay=10)  # Added bind, retries
+def generate_report_task(self, report_id: str):  # Added self
     report: Union[Report, None] = None
     try:
-        report = Report.objects.get(report_id=report_id)
-        report.status = "Running"
-        report.save()
+        try:
+            report = Report.objects.get(report_id=report_id)
+        except Report.DoesNotExist as exc:
+            logger.warning(
+                f"Report {report_id} not found on attempt {self.request.retries + 1}. Retrying..."
+            )
+            raise self.retry(
+                exc=exc,
+                countdown=int(self.default_retry_delay * (2**self.request.retries)),
+            )  # Exponential backoff
+
+        # Ensure status is Running, especially if retried.
+        if report.status != "Running":
+            report.status = "Running"
+            # We might not want to overwrite completed_at if it was already set by a previous failed attempt
+            # that somehow didn't update status but did set completed_at.
+            # For simplicity, we'll just ensure it's running.
+            report.save(update_fields=["status"])
+
         logger.info(f"Starting report generation for report_id: {report_id}")
 
         store_statuses_df, business_hours_df, timezones_df = _load_all_data()
@@ -104,9 +120,32 @@ def generate_report_task(report_id: str):
 
     except Exception as e:
         logger.error(f"Error generating report {report_id}: {e}", exc_info=True)
-        if report:
+        # Try to fetch the report again to update its status if it was found initially
+        # or if this is a final failure after retries for Report.DoesNotExist
+        if report is None:  # If initial fetch failed and retries exhausted
+            try:
+                report = Report.objects.get(report_id=report_id)
+            except Report.DoesNotExist:
+                logger.error(
+                    f"Report {report_id} could not be found to mark as Failed."
+                )
+                report = None  # Ensure report is None if it still can't be found
+
+        if report:  # Check if report object exists
             report.status = "Failed"
             report.report_data = f"Error: {str(e)}"
             report.completed_at = timezone.now()
             report.save()
-        raise
+
+        # If the original exception was due to retry exhaustion for Report.DoesNotExist,
+        # re-raising it might not be what Celery expects for a "final" failure state
+        # if self.request.retries == self.max_retries and isinstance(e, Report.DoesNotExist):
+        #     # Log final failure, don't re-raise self.retry's exception
+        #     logger.critical(f"Report {report_id} ultimately failed to be found after {self.max_retries} retries.")
+        # else:
+        # For other exceptions, or if not a retry-exhaustion scenario for DoesNotExist
+        if not (
+            self.request.retries >= self.max_retries
+            and isinstance(e, Report.DoesNotExist)
+        ):
+            raise  # Re-raise other exceptions, or if retries not exhausted for DoesNotExist
