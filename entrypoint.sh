@@ -12,8 +12,11 @@ echo "Running Database Migrations..."
 python manage.py makemigrations store_monitor_api
 python manage.py migrate --noinput
 
-echo "Ingesting data using parallel processing..."
-python manage.py load_csv_data
+# If INGEST is present in the environment, run the data ingestion script.
+if [ -n "$INGEST" ]; then
+    echo "Ingesting data..."
+    python manage.py load_csv_data
+fi
 
 echo "Starting Django Development Server..."
 # Using 0.0.0.0 makes the server accessible from outside the container.
