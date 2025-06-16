@@ -1,0 +1,10 @@
+.venv/
+.vscode/
+LICENSE
+eda.ipynb
+.git/
+.gitignore
+.gitattributes
+docker-compose.yml
+**/__pycache__/
+*.pyc

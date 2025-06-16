@@ -1,0 +1,63 @@
+services:
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - ./docs:/app/docs
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      # - redis
+    environment:
+      - DJANGO_SETTINGS_MODULE=store_monitor_project.settings
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+
+  db:
+    image: postgres:alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
+  celery_worker:
+    build: .
+    entrypoint: []
+    command: celery -A store_monitor_project worker -l info --concurrency=8 --without-mingle --without-gossip --loglevel=debug
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - db
+    environment:
+      - DJANGO_SETTINGS_MODULE=store_monitor_project.settings
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+
+volumes:
+  postgres_data:
