@@ -59,7 +59,7 @@ The initial data from the provided CSV files is automatically loaded into the da
     ```
 
 ### Get Report
-
+> Generation took 5 minutes on my machine.
 *   `GET /api/get_report/{report_id}/`
 *   **Description:** Retrieves the status or the result of a report generation task.
 *   **URL Parameters:**
@@ -77,7 +77,6 @@ The initial data from the provided CSV files is automatically loaded into the da
 
 > [!IMPORTANT]
 > There is an example output in `example_output.json`. Note the 0 uptime throughout. That is because the data ends at 2024/10
-> Generation took 5 minutes on my machine.
 
 ## Uptime/Downtime Calculation Logic
 
